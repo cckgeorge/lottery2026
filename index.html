@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 幸運抽籤 - 教學進階版</title>
+    <style>
+        :root {
+            --sky-blue: #a0d8ef;
+            --grass-green: #8fd400;
+            --sun-yellow: #fff9c4;
+            --orange-red: #ff5722;
+            --mario-red: #e4000f;
+            --mario-blue: #0058e0;
+        }
+        body {
+            background: linear-gradient(to bottom, var(--sky-blue) 0%, #e0f2f1 70%, var(--grass-green) 100%);
+            color: #333; font-family: "Microsoft JhengHei", sans-serif;
+            margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh;
+        }
+        .container {
+            text-align: center; width: 95%; max-width: 900px; background: rgba(255, 255, 255, 0.95);
+            padding: 30px; border-radius: 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.15); border: 8px solid white;
+        }
+        h1 { font-size: 3rem; color: var(--mario-blue); text-shadow: 2px 2px 0px white; margin: 0 0 20px 0; }
+        .settings-bar {
+            display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; margin-bottom: 25px;
+            background: #f1f8e9; padding: 20px; border-radius: 20px; border: 2px solid #c5e1a5;
+        }
+        .setting-item { display: flex; flex-direction: column; align-items: flex-start; }
+        .setting-item label { font-weight: bold; margin-bottom: 5px; color: #555; font-size: 0.9rem; }
+        select { padding: 10px 15px; font-size: 1.1rem; border-radius: 12px; border: 2px solid #795548; background: white; cursor: pointer; }
+        .display-card {
+            background-color: var(--sun-yellow); border: 6px solid var(--orange-red); border-radius: 35px;
+            padding: 40px 20px; min-height: 380px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 20px rgba(255, 87, 34, 0.1);
+        }
+        #winner-info { font-size: 1.6rem; color: #5d4037; background: white; padding: 8px 25px; border-radius: 30px; margin-bottom: 10px; box-shadow: 0 4px 0px rgba(0,0,0,0.05); }
+        #winner-name { font-size: 6rem; font-weight: bold; color: var(--mario-red); text-shadow: 4px 4px 0px white; margin: 5px 0; }
+        .sentence-box { width: 90%; background: white; border: 4px solid #ffb74d; border-radius: 20px; padding: 25px; margin-top: 15px; display: none; }
+        .sentence-en { font-size: 2.2rem; color: var(--mario-blue); font-weight: bold; display: block; margin-bottom: 8px; line-height: 1.2; }
+        .sentence-ch { font-size: 1.8rem; color: #555; display: block; }
+        .btn-group { margin-top: 25px; display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;}
+        .draw-btn { padding: 15px 60px; font-size: 1.8rem; background: var(--orange-red); color: white; border: none; border-radius: 60px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 0px #b71c1c; transition: all 0.1s; }
+        .draw-btn:active { transform: translateY(4px); box-shadow: 0 4px 0px #b71c1c; }
+        .reset-btn { padding: 10px 20px; font-size: 1rem; background: #9e9e9e; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .celebrate { animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        #counter-info { margin-top: 15px; font-size: 1rem; color: #666; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎯 幸運抽籤</h1>
+    <div class="settings-bar">
+        <div class="setting-item"><label>年級</label><select id="gradeSelect"></select></div>
+        <div class="setting-item"><label>班級</label><select id="classSelect"></select></div>
+        <div class="setting-item"><label>週次</label><select id="weekSelect"></select></div>
+    </div>
+    <div class="display-card" id="display-area">
+        <div id="winner-info">準備好了嗎？</div>
+        <div id="winner-name">？</div>
+        <div class="sentence-box" id="sentence-box">
+            <span style="color: var(--orange-red); font-weight: bold;">📖 每週一句：</span>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+            <span class="sentence-en" id="sentence-en"></span>
+            <span class="sentence-ch" id="sentence-ch"></span>
+        </div>
+    </div>
+    <div class="btn-group">
+        <button class="draw-btn" id="btnDraw">開始抽籤！</button>
+        <button class="reset-btn" id="btnReset">重置選定名單紀錄</button>
+    </div>
+    <div id="counter-info">剩餘 -- 人未抽中</div>
+</div>
+
+<script>
+// --- 音效系統 ---
+let audioCtx = null;
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playCoin() {
+    initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+    osc.type = 'square'; osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); 
+    osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); 
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+    osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+}
+function playPowerUp() {
+    initAudio(); const freqs = [130.81, 155.56, 196.00, 261.63, 311.13, 392.00, 523.25, 622.25, 783.99];
+    freqs.forEach((f, i) => {
+        const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        osc.type = 'square'; osc.frequency.setValueAtTime(f, audioCtx.currentTime + i * 0.07);
+        g.gain.setValueAtTime(0.08, audioCtx.currentTime + i * 0.07); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.07 + 0.1);
+        osc.connect(g); g.connect(audioCtx.destination); osc.start(audioCtx.currentTime + i * 0.07); osc.stop(audioCtx.currentTime + i * 0.07 + 0.1);
+    });
+}
+
+// --- 每週一句資料 ---
+const sentencesData = {
+    "三年": { 4: {en: "Good job!", ch: "做得好！"}, 5: {en: "Hands up, please.", ch: "請舉手。"}, 6: {en: "Hands down.", ch: "手放下。"}, 7: {en: "Eyes on me.", ch: "眼睛看我。"}, 8: {en: "Take a seat.", ch: "請坐好。"}, 9: {en: "Try again.", ch: "再試一次。"}, 10: {en: "Very good!", ch: "非常好！"}, 11: {en: "Are you ready?", ch: "準備好了嗎？"}, 12: {en: "—", ch: "—"}, 13: {en: "Follow me.", ch: "跟著我。"}, 14: {en: "One more time.", ch: "再一次。"}, 15: {en: "Let’s try.", ch: "我們試試看。"}, 16: {en: "Good listening!", ch: "聽得很好！"}, 17: {en: "Do your best.", ch: "盡力而為。"}, 18: {en: "Thank you.", ch: "謝謝你。"}, 19: {en: "I can do it.", ch: "我做得到！"}, 20: {en: "Have a nice day!", ch: "祝你有美好的一天！"} },
+    "四年": { 4: {en: "Welcome back to school.", ch: "歡迎回到學校。"}, 5: {en: "Happy to see you again.", ch: "很開心又見面了。"}, 6: {en: "Time for class.", ch: "上課囉！"}, 7: {en: "Here we go.", ch: "我們開始吧！"}, 8: {en: "Here you are.", ch: "這個給你。"}, 9: {en: "Take it easy.", ch: "放輕鬆。"}, 10: {en: "Good luck.", ch: "祝好運。"}, 11: {en: "Hold on a second.", ch: "等一下。"}, 12: {en: "—", ch: "—"}, 13: {en: "Take your time.", ch: "慢慢來。"}, 14: {en: "See you next week.", ch: "下星期見。"}, 15: {en: "Have fun.", ch: "玩得愉快！"}, 16: {en: "Need some help?", ch: "需要幫忙嗎？"}, 17: {en: "Could you do me a favor?", ch: "可以幫我一個忙嗎？"}, 18: {en: "I’m almost done.", ch: "我快好了！"}, 19: {en: "Good for you.", ch: "做得好！"}, 20: {en: "Are you OK?", ch: "還好嗎？"} },
+    "五年": { 4: {en: "Take your time.", ch: "慢慢來，不用急。"}, 5: {en: "You can say that again.", ch: "你說得沒錯。"}, 6: {en: "May I help you?", ch: "我可以幫你嗎？"}, 7: {en: "That sounds fun!", ch: "聽起來很有趣！"}, 8: {en: "How was your weekend?", ch: "你的週末過得如何？"}, 9: {en: "Please say it again.", ch: "請再說一次。"}, 10: {en: "I'm proud of you!", ch: "我為你感到驕傲！"}, 11: {en: "Keep up the good work!", ch: "繼續保持好表現！"}, 12: {en: "—", ch: "—"}, 13: {en: "You blew it!", ch: "你把事情搞砸了！"}, 14: {en: "What a deal!", ch: "好便宜！"}, 15: {en: "Take good care of yourself.", ch: "好好照顧自己。"}, 16: {en: "Today is my day.", ch: "我今天運氣真好。"}, 17: {en: "I need to take a day off.", ch: "我需要請一天假。"}, 18: {en: "I’m on your side.", ch: "我支持你。"}, 19: {en: "Practice makes perfect.", ch: "熟能生巧。"}, 20: {en: "Go for it!", ch: "加油！"} },
+    "六年": { 4: {en: "What did you hear?", ch: "你聽到什麼了？"}, 5: {en: "Which one do you like?", ch: "你喜歡哪一個？"}, 6: {en: "Who can answer me?", ch: "誰能回答？"}, 7: {en: "Take your time.", ch: "慢慢來，不用急。"}, 8: {en: "Let's go out for a walk.", ch: "讓我們出去走走。"}, 9: {en: "Please keep the table clean.", ch: "請保持桌面乾淨。"}, 10: {en: "You are very clever!", ch: "你真聰明！"}, 11: {en: "May I use your pen?", ch: "我可以借用一下你的筆嗎？"}, 12: {en: "全中運停課", ch: "No school today!"}, 13: {en: "What’s your plan?", ch: "你週末有什麼計畫？"}, 14: {en: "Where is the restroom?", ch: "洗手間在哪裡？"}, 15: {en: "I feel better now.", ch: "我感覺好多了。"}, 16: {en: "It doesn't matter.", ch: "沒關係的。"}, 17: {en: "I need some rest.", ch: "我需要休息一下。"}, 18: {en: "It's up to you.", ch: "由你決定"}, 19: {en: "It’s a piece of cake.", ch: "這太容易了。"}, 20: {en: "Give me a break!", ch: "饒了我吧！"} }
+};
+
+const weekDates = {4:"02/27", 5:"03/06", 6:"03/13", 7:"03/20", 8:"03/27", 9:"04/03", 10:"04/10", 11:"04/17", 12:"04/24", 13:"05/01", 14:"05/08", 15:"05/15", 16:"05/22", 17:"05/29", 18:"06/05", 19:"06/12", 20:"06/19"};
+const weekSelect = document.getElementById('weekSelect');
+Object.keys(weekDates).forEach(w => weekSelect.add(new Option(`第 ${w} 週 (${weekDates[w]})`, w)));
+
+// --- 名單資料 (完整) ---
+const rawRoster = `一年忠班,1,陳泰宇
+一年忠班,2,吳侑宸
+一年忠班,3,莊天豪
+一年忠班,4,官郡豐
+一年忠班,5,林哲宇
+一年忠班,6,蔡忻睿
+一年忠班,7,徐子洋
+一年忠班,8,吳昆霖
+一年忠班,9,黃士峰
+一年忠班,10,何葦翔
+一年忠班,11,邱芷玲
+一年忠班,12,蔡芮億
+一年忠班,13,陳乙函
+一年忠班,14,楊晨星
+一年忠班,15,陳妙芯
+一年忠班,16,呂秀勻
+一年忠班,17,呂佳璇
+一年忠班,18,傅榆涵
+一年忠班,19,錢品辰
+一年忠班,20,周穎暄
+一年忠班,21,郭栗禾
+一年忠班,22,蘇柏欣
+一年忠班,23,劉泳嫻
+一年孝班,1,李柏叡
+一年孝班,2,楊才毅
+一年孝班,3,黃麒安
+一年孝班,4,王哲愷
+一年孝班,5,阮楷翔
+一年孝班,6,宋鎮宇
+一年孝班,7,黃陳威志
+一年孝班,8,蔡秉軒
+一年孝班,9,林啟洺
+一年孝班,10,官正叡
+一年孝班,11,呂彥霆
+一年孝班,12,賴映榳
+一年孝班,13,洪微晴
+一年孝班,14,吳子璇
+一年孝班,15,蔡侑暿
+一年孝班,16,王晴暄
+一年孝班,17,蔡聿婕
+一年孝班,18,官旻燁
+一年孝班,19,何霜季
+一年孝班,20,蔡沂妤
+一年孝班,21,謝椬蓒
+一年孝班,22,黃郁甯
+二年忠班,1,黃信佳
+二年忠班,2,吳丞閔
+二年忠班,3,呂紹愷
+二年忠班,4,張權宇
+二年忠班,5,陳泰燁
+二年忠班,6,吳文樂
+二年忠班,7,蔡睿恩
+二年忠班,8,賴裕聖
+二年忠班,9,蔣國呈
+二年忠班,10,蔡佑杰
+二年忠班,11,黃品鈞
+二年忠班,12,林子凌
+二年忠班,13,吳芮妘
+二年忠班,14,林宣岑
+二年忠班,15,陳昕悅
+二年忠班,16,林妍曦
+二年忠班,17,蔡艾庭
+二年忠班,18,謝心予
+二年忠班,19,呂蕎妤
+二年忠班,20,蔡依珊
+二年孝班,1,林家闓
+二年孝班,2,陳錠逵
+二年孝班,3,馬均凱
+二年孝班,4,洪鎮祐
+二年孝班,5,蔡忻恆
+二年孝班,6,曹品鈞
+二年孝班,7,陳星宇
+二年孝班,8,呂尚恩
+二年孝班,9,吳昱豪
+二年孝班,10,侯竑宇
+二年孝班,11,方思晴
+二年孝班,12,江之甯
+二年孝班,13,蔡侑汝
+二年孝班,14,蘇縈軒
+二年孝班,15,蔡宜蓁
+二年孝班,16,蔡語岑
+二年孝班,17,柯嘉晏
+二年孝班,18,林宣岑
+二年孝班,19,楊侑穎
+二年孝班,20,官筠庭
+二年仁班,1,侯偉杰
+二年仁班,2,蔡博安
+二年仁班,3,林軒圻
+二年仁班,4,王智韋
+二年仁班,5,郭洪頡
+二年仁班,6,蔡克擎
+二年仁班,7,官子祐
+二年仁班,8,王宏志
+二年仁班,9,雷子毅
+二年仁班,10,龔浚瑋
+二年仁班,11,蔡婕筠
+二年仁班,12,徐子甯
+二年仁班,13,官於甯
+二年仁班,14,黃巧瑜
+二年仁班,15,郭芯瑜
+二年仁班,16,呂立慈
+二年仁班,17,賴忻妮
+二年仁班,18,蔡佩妏
+二年仁班,19,黃斯筠
+三年忠班,1,呂彥澄
+三年忠班,2,蔡金河
+三年忠班,3,蔡沅佐
+三年忠班,4,劉宇昕
+三年忠班,5,侯佾承
+三年忠班,6,蔡承翰
+三年忠班,7,鐘柏崴
+三年忠班,8,賴邵邡
+三年忠班,9,侯鈞程
+三年忠班,10,林廣曜
+三年忠班,11,蔡少瑋
+三年忠班,12,林歆喬
+三年忠班,13,賴映儒
+三年忠班,14,陳語旋
+三年忠班,15,鄭琳營
+三年忠班,16,楊婕妤
+三年忠班,17,涂娠瑄
+三年忠班,18,施子瑜
+三年忠班,19,蘇盈甄
+三年孝班,1,蔡旻宇
+三年孝班,2,陳佑佑
+三年孝班,3,侯凱森
+三年孝班,4,廖冠赫
+三年孝班,5,呂承翰
+三年孝班,6,蔡濬叡
+三年孝班,7,楊諺霖
+三年孝班,8,黃麒宏
+三年孝班,9,官甫沅
+三年孝班,10,陳椲捷
+三年孝班,11,蔡秉綸
+三年孝班,12,官芃忻
+三年孝班,13,蔡諝倫
+三年孝班,14,徐以璐
+三年孝班,15,許孟瑄
+三年孝班,16,官雨萱
+三年孝班,17,王雨婕
+三年仁班,1,郭信辰
+三年仁班,2,沈冠霖
+三年仁班,3,石翊辰
+三年仁班,4,黃子健
+三年仁班,5,呂柏樂
+三年仁班,6,黃彥碩
+三年仁班,7,傅椲恩
+三年仁班,8,吳承鋙
+三年仁班,9,吳承均
+三年仁班,10,張文欽
+三年仁班,11,石承運
+三年仁班,12,劉子寧
+三年仁班,13,黃一葦
+三年仁班,14,陳倚靖
+三年仁班,15,賴家糛
+三年仁班,16,呂妤晨
+三年仁班,17,侯喬馨
+三年仁班,18,林妍蓁
+三年仁班,19,許文菱
+四年忠班,1,蔡宇暢
+四年忠班,2,張允杰
+四年忠班,3,李崇銘
+四年忠班,4,賴承翰
+四年忠班,5,梁允睿
+四年忠班,6,涂家銘
+四年忠班,7,柯汯琍
+四年忠班,8,蔡侑宸
+四年忠班,9,林恩丞
+四年忠班,10,馬翊愷
+四年忠班,11,張筑鈞
+四年忠班,12,黃子芳
+四年忠班,13,陳芓伃
+四年忠班,14,黃榆媃
+四年忠班,15,傅紫晴
+四年忠班,16,洪千涵
+四年忠班,17,黃苡蕎
+四年忠班,18,蔡容璇
+四年忠班,19,張紜瑄
+四年忠班,20,鄭恩佳
+四年忠班,21,蔡欣宸
+四年忠班,22,葉瑀琋
+四年孝班,1,呂宥義
+四年孝班,2,林羽翔
+四年孝班,3,馬偉珉
+四年孝班,4,張宏源
+四年孝班,5,蔡政叡
+四年孝班,6,李紘舟
+四年孝班,7,黃泰逸
+四年孝班,8,何柏諒
+四年孝班,9,鄭兆凱
+四年孝班,10,莊子賢
+四年孝班,11,雷依勍
+四年孝班,12,侯芝芸
+四年孝班,13,侯旨芮
+四年孝班,14,涂娠蒨
+四年孝班,15,許庭綺
+四年孝班,16,顏辰芳
+四年孝班,17,黃佳柔
+四年孝班,18,戴妍昕
+四年孝班,19,羅子依
+四年孝班,20,蔡宜辰
+四年仁班,1,陳書稷
+四年仁班,2,陳啟峯
+四年仁班,3,劉耘典
+四年仁願,4,陳人華
+四年仁班,5,鄭亦恩
+四年仁班,6,許晨恩
+四年仁班,7,王博彥
+四年仁班,8,馬嘉佑
+四年仁班,9,黃忠陞
+四年仁班,10,吳祐錦
+四年仁班,11,王又加
+四年仁班,12,陳樂
+四年仁班,13,吳芸橙
+四年仁班,14,吳芸蓁
+四年仁班,15,林采樂
+四年仁班,16,張昱臻
+四年仁班,17,張云馨
+四年仁班,18,蔡語喬
+四年仁班,19,洪若珈
+四年仁班,20,官霈沄
+四年仁班,21,侯怡琁
+四年仁班,22,王仲卉
+五年忠班,1,楊仁杰
+五年忠班,2,郭冠廷
+五年忠班,3,陳和逸
+五年忠班,4,吳奕泰
+五年忠班,5,王茂畯
+五年忠班,6,温宇城
+五年忠班,7,林琨捷
+五年忠班,8,傅於軒
+五年忠班,9,陳元麒
+五年忠班,10,馬盈安
+五年忠班,11,呂昀甄
+五年忠班,12,李妍質
+五年忠班,13,林芯羽
+五年忠班,14,沈庭妤
+五年忠班,15,蔡季庭
+五年忠班,16,沈芝儀
+五年忠班,17,馬苹琁
+五年忠班,18,張芯慈
+五年忠班,19,吳苡蓁
+五年孝班,1,呂起杭
+五年孝班,2,侯宇宸
+五年孝班,3,蘇彥宸
+五年孝班,4,李育峰
+五年孝班,5,侯威丞
+五年孝班,6,李明儒
+五年孝班,7,徐柏榆
+五年孝班,8,賴譽仁
+五年孝班,9,林彥佑
+五年孝班,10,許芯嫙
+五年孝班,11,黃子恩
+五年孝班,12,吳緯琳
+五年孝班,13,黃子宸
+五年孝班,14,蔡楹姍
+五年孝班,15,雷小葆
+五年孝班,16,李辰晞
+五年孝班,17,陳倚帆
+五年孝班,18,陳依姍
+五年仁班,1,王健倫
+五年仁班,2,黃冠棠
+五年仁班,3,錢宣邑
+五年仁班,4,郭向宸
+五年仁班,5,黃冠霖
+五年仁班,6,龔逸凱
+五年仁班,7,蔡少朋
+五年仁班,8,呂東澤
+五年仁班,9,賴俊瑋
+五年仁班,10,呂忻倪
+五年仁班,11,陳宥臻
+五年仁班,12,劉芯沅
+五年仁班,13,蔡云馨
+五年仁班,14,翁若云
+五年仁班,15,陳巧芳
+五年仁班,16,蕭梓喬
+五年仁班,17,呂喬媗
+五年仁班,18,林苡茜
+六年忠班,1,蔡岳庭
+六年忠班,2,黃琚祐
+六年忠班,3,陳柏豪
+六年忠班,4,吳奕震
+六年忠班,5,葉丞祐
+六年忠班,6,陳建綸
+六年忠班,7,黃傳薪
+六年忠班,8,蔡嘉龍
+六年忠班,9,王瑀澤
+六年忠班,10,馬伯勳
+六年忠班,11,陳韋呈
+六年忠班,12,向唄樂
+六年忠班,13,吳昀靜
+六年忠班,14,蔡雨恩
+六年忠班,15,魏綾圻
+六年忠班,16,官宜蓁
+六年忠班,17,鄭竹晽
+六年忠班,18,張芊鈺
+六年忠班,19,黃梓榕
+六年忠班,20,李依宸
+六年忠班,21,王苡恩
+六年忠班,22,蔡宛蓁
+六年忠班,23,張芃緗
+六年孝班,1,陳柏維
+六年孝班,2,林冠廷
+六年孝班,3,雷振宇
+六年孝班,4,蔡承諭
+六年孝班,5,呂威霆
+六年孝班,6,盧彥璋
+六年孝班,7,張誠恩
+六年孝班,8,蘇郁智
+六年孝班,9,官臨恩
+六年孝班,10,何梓伊
+六年孝班,11,馬翊瑞
+六年孝班,12,官采柔
+六年孝班,13,陳韋茹
+六年孝班,14,陳恩嘉
+六年孝班,15,呂忻諭
+六年孝班,16,廖文妤
+六年孝班,17,施忻妤
+六年孝班,18,李采衣
+六年孝班,19,劉宜婷
+六年孝班,20,鐘亭汶
+六年孝班,21,黃沛芯
+六年孝班,22,蔡依叡
+六年孝班,23,王妡伃
+六年仁班,1,楊承諺
+六年仁班,2,李昌霖
+六年仁班,3,王仲宇
+六年仁班,4,張宸瑋
+六年仁班,5,陳宥廷
+六年仁班,6,張恩承
+六年仁班,7,蘇裕荃
+六年仁班,8,侯柏辰
+六年仁班,9,蔡明哲
+六年仁班,10,林士涵
+六年仁班,11,王晨覟
+六年仁班,12,陳妍甯
+六年仁班,13,許芷瑄
+六年仁班,14,許彩芯
+六年仁班,15,張珉瑄
+六年仁班,16,林琬頤
+六年仁班,17,陳毓潔
+六年仁班,18,蔡宜琇
+六年仁班,19,官可馨
+六年仁班,20,蔡佳諼
+六年仁班,21,黃琬琇
+六年仁班,22,蕭敏安
+六年仁班,23,黃珮婷`;
+
+const students = rawRoster.split('\n').map(l => {
+    const [klass, seat, name] = l.split(',');
+    return { id: klass+seat+name, klass, seat, name };
+});
+
+// --- 下拉選單連動邏輯 ---
+const gradeSelect = document.getElementById('gradeSelect');
+const classSelect = document.getElementById('classSelect');
+
+["一年", "二年", "三年", "四年", "五年", "六年"].forEach(g => gradeSelect.add(new Option(g + "級", g)));
+
+function updateClassOptions() {
+    const grade = gradeSelect.value;
+    const classesInGrade = [...new Set(students.filter(s => s.klass.startsWith(grade)).map(s => s.klass))];
+    classSelect.innerHTML = "";
+    classSelect.add(new Option("全部班級", "all"));
+    classesInGrade.forEach(c => classSelect.add(new Option(c, c)));
+    updateCounter();
+}
+
+gradeSelect.addEventListener('change', updateClassOptions);
+classSelect.addEventListener('change', updateCounter);
+
+// --- 記憶與計數邏輯 ---
+let drawnHistory = JSON.parse(localStorage.getItem('drawn_history_final_v4')) || [];
+
+function updateCounter() {
+    const grade = gradeSelect.value;
+    const klass = classSelect.value;
+    let currentPool = students.filter(s => s.klass.startsWith(grade));
+    if (klass !== "all") currentPool = currentPool.filter(s => s.klass === klass);
+    
+    const total = currentPool.length;
+    const drawn = drawnHistory.filter(id => {
+        const s = students.find(std => std.id === id);
+        return s && s.klass.startsWith(grade) && (klass === "all" || s.klass === klass);
+    }).length;
+    
+    document.getElementById('counter-info').innerText = `目前名單共 ${total} 人，已抽 ${drawn} 人，剩餘 ${total - drawn} 人`;
+}
+
+updateClassOptions(); // 初始載入
+
+// --- 抽籤主程式 ---
+const btnDraw = document.getElementById('btnDraw');
+const winnerInfo = document.getElementById('winner-info');
+const winnerName = document.getElementById('winner-name');
+const sentenceBox = document.getElementById('sentence-box');
+const sentenceEn = document.getElementById('sentence-en');
+const sentenceCh = document.getElementById('sentence-ch');
+
+btnDraw.addEventListener('click', () => {
+    const grade = gradeSelect.value;
+    const klass = classSelect.value;
+    const week = weekSelect.value;
+    
+    let pool = students.filter(s => s.klass.startsWith(grade) && !drawnHistory.includes(s.id));
+    if (klass !== "all") pool = pool.filter(s => s.klass === klass);
+
+    if (pool.length === 0) {
+        if (confirm("選定名單的所有人都抽過囉！要重置紀錄開始新的一輪嗎？")) {
+            // 只重置目前選擇範圍的紀錄
+            drawnHistory = drawnHistory.filter(id => {
+                const s = students.find(std => std.id === id);
+                if (!s) return false;
+                const matchGrade = s.klass.startsWith(grade);
+                const matchKlass = (klass === "all" || s.klass === klass);
+                return !(matchGrade && matchKlass);
+            });
+            localStorage.setItem('drawn_history_final_v4', JSON.stringify(drawnHistory));
+            updateCounter();
+            alert("已清空紀錄，請再次點擊抽籤。");
+        }
+        return;
+    }
+
+    btnDraw.disabled = true;
+    sentenceBox.style.display = 'none';
+    winnerName.classList.remove('celebrate');
+    winnerInfo.innerText = "🔍 搜尋同學中...";
+
+    let counter = 0;
+    const interval = setInterval(() => {
+        const rand = pool[Math.floor(Math.random() * pool.length)];
+        winnerName.innerText = rand.name;
+        if (counter % 3 === 0) playCoin();
+        counter++;
+
+        if (counter >= 30) {
+            clearInterval(interval);
+            const final = pool[Math.floor(Math.random() * pool.length)];
+            winnerInfo.innerText = `${final.klass} | 座號 ${final.seat}`;
+            winnerName.innerText = final.name;
+            winnerName.classList.add('celebrate');
+
+            // 儲存紀錄
+            drawnHistory.push(final.id);
+            localStorage.setItem('drawn_history_final_v4', JSON.stringify(drawnHistory));
+            updateCounter();
+
+            // 顯示每週一句 (3-6年級)
+            if (["三年", "四年", "五年", "六年"].includes(grade)) {
+                const data = sentencesData[grade][week];
+                if (data && data.en !== "—") {
+                    sentenceEn.innerText = data.en;
+                    sentenceCh.innerText = data.ch;
+                    sentenceBox.style.display = 'block';
+                }
+            }
+            playPowerUp();
+            btnDraw.disabled = false;
+        }
+    }, 70);
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+    const grade = gradeSelect.value;
+    const klass = classSelect.value;
+    const scope = klass === "all" ? `${grade}級全部班級` : klass;
+    if (confirm(`確定要清除【${scope}】的所有抽籤紀錄嗎？`)) {
+        drawnHistory = drawnHistory.filter(id => {
+            const s = students.find(std => std.id === id);
+            if (!s) return false;
+            const matchGrade = s.klass.startsWith(grade);
+            const matchKlass = (klass === "all" || s.klass === klass);
+            return !(matchGrade && matchKlass);
+        });
+        localStorage.setItem('drawn_history_final_v4', JSON.stringify(drawnHistory));
+        updateCounter();
+        alert("紀錄已清除！");
+    }
+});
+</script>
+</body>
+</html>
